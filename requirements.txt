@@ -1,0 +1,10 @@
+numpy
+pandas
+tabulate
+scikit-learn
+lightgbm
+joblib
+psutil
+matplotlib
+# للنموذج 04 فقط (اختياري على اللابتوب، على Pi استخدمي tflite-runtime):
+# tensorflow

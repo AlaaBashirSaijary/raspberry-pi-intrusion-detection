@@ -1,0 +1,7 @@
+data/*
+!data/download.md
+models/*
+!models/.gitkeep
+__pycache__/
+*.pyc
+.venv/
