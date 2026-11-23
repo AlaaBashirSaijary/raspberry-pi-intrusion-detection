@@ -2,6 +2,30 @@
 import argparse, os, time, csv, glob
 import numpy as np, joblib, psutil
 
+
+def load_predictor(path):
+    """يعيد دالة predict لصف واحد. يدعم joblib (sklearn/lightgbm) و.tflite."""
+    if path.endswith(".tflite"):
+        try:
+            from tflite_runtime.interpreter import Interpreter
+        except ImportError:
+            import tensorflow as tf
+            Interpreter = tf.lite.Interpreter
+        it = Interpreter(model_path=path, num_threads=1); it.allocate_tensors()
+        i, o = it.get_input_details()[0], it.get_output_details()[0]
+
+        def predict(x):
+            it.set_tensor(i["index"], x[..., None].astype(np.float32))
+            it.invoke()
+            return it.get_tensor(o["index"])
+        return predict
+    m = joblib.load(path)["model"]
+    try:
+        m.set_params(n_jobs=1)   # صف واحد: تعدد الخيوط يضيف كلفة لا تمثل الاستدلال الفعلي
+    except (ValueError, AttributeError):
+        pass
+    return m.predict
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -18,14 +42,15 @@ def main():
     p.add_argument("--sample", default=os.path.join(ROOT, "models", "sample_X.npy"))
     p.add_argument("--watts", type=float, default=float("nan"), help="قراءة مقياس الطاقة أثناء التشغيل")
     a = p.parse_args()
-    obj = joblib.load(a.model); m = obj["model"]
-    X = np.load(a.sample)
-    m.predict(X[:5])  # إحماء
+    predict = load_predictor(a.model)
+    X = np.load(a.sample)   # مُطبَّعة مسبقاً؛ تُنتَج في كل تشغيل تدريب
+    for row in X[:5]:
+        predict(row[None, :])  # إحماء
     proc = psutil.Process(); proc.cpu_percent(None)
     lat = []
     for row in X[:300]:
-        t = time.perf_counter(); m.predict(row[None, :]); lat.append((time.perf_counter() - t) * 1000)
-    out = {"model": os.path.basename(a.model).replace(".joblib", ""),
+        t = time.perf_counter(); predict(row[None, :]); lat.append((time.perf_counter() - t) * 1000)
+    out = {"model": os.path.splitext(os.path.basename(a.model))[0],
            "latency_ms_mean": round(float(np.mean(lat)), 3),
            "latency_ms_p95": round(float(np.percentile(lat, 95)), 3),
            "cpu_percent": proc.cpu_percent(None),

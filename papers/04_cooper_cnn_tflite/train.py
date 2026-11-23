@@ -2,7 +2,7 @@
 import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import numpy as np
 import tensorflow as tf
-from common.runner import run, ROOT
+from common.runner import run
 
 
 class KerasCNN:
@@ -25,6 +25,11 @@ class KerasCNN:
     def predict(self, X):
         return (self.m.predict(X[..., None], verbose=0).ravel() > 0.5).astype(int)
 
+    def save_artifacts(self, path):
+        """تحويل النموذج إلى TFLite (يستدعيه المشغّل). measure_pi يقيس هذا الملف."""
+        conv = tf.lite.TFLiteConverter.from_keras_model(self.m)
+        conv.optimizations = [tf.lite.Optimize.DEFAULT]
+        open(path, "wb").write(conv.convert())
 
-row = run("cooper_cnn", lambda s: KerasCNN(s))
-# تحويل آخر نموذج إلى TFLite لقياسه على Pi (انظري README)
+
+run("cooper_cnn", lambda s: KerasCNN(s))
